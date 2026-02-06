@@ -27,7 +27,8 @@ temp_proxy_extensions/
 *.swo
 .DS_Store
 Thumbs.db
-
+gesperrt.txt
+gesperrt.txt
 # Optional: uncomment if you don't want to track message/schedule files
 # nachricht1.txt
 # nachricht2.txt
