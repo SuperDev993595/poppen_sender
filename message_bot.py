@@ -23,7 +23,7 @@ from local_proxy import start_local_proxy
 global csrf, driver
 
 
-def send_message(group_id, nickname, client_id, driver, csrf):
+def send_message(group_id, nickname, client_id, driver, csrf, requests_proxy=None):
     print(f"[INFO] Sending message to {nickname}, group_id: {group_id}, client_id: {client_id}")
     with open("nachricht1.txt") as f:
         messages1_list = f.readlines()
@@ -33,9 +33,12 @@ def send_message(group_id, nickname, client_id, driver, csrf):
         messages2_list = f.readlines()
         messages2_list = [x.strip() for x in messages2_list]
 
-    with open("proxys.txt") as f:
-        proxy_list = f.readlines()
-        proxy_list = [x.strip() for x in proxy_list]
+    if requests_proxy is None:
+        with open("proxys.txt") as f:
+            proxy_list = f.readlines()
+            proxy_list = [x.strip() for x in proxy_list]
+    else:
+        proxy_list = None  # use requests_proxy only
 
     message_part1 = random.choice(messages1_list)
     message_part2 = random.choice(messages2_list)
@@ -98,20 +101,21 @@ def send_message(group_id, nickname, client_id, driver, csrf):
             c = 1
             while True:
                 try:
-                    proxy = random.choice(proxy_list)
-                    # Parse proxy using the parse_proxy function
-                    parsed_proxy = parse_proxy(proxy)
-                    username = parsed_proxy["username"]
-                    password = parsed_proxy["password"]
-                    endpoint = parsed_proxy["host"]
-                    port = parsed_proxy["port"]
-                    
-                    proxy = username + ":" + password + "@" + endpoint + ":" + port
-                    
-                    proxy_payload = {
-                        'http' : 'http://' + proxy,
-                        'https' : 'http://' + proxy,
-                    }
+                    if requests_proxy is not None:
+                        proxy_payload = requests_proxy
+                    else:
+                        proxy = random.choice(proxy_list)
+                        # Parse proxy using the parse_proxy function
+                        parsed_proxy = parse_proxy(proxy)
+                        username = parsed_proxy["username"]
+                        password = parsed_proxy["password"]
+                        endpoint = parsed_proxy["host"]
+                        port = parsed_proxy["port"]
+                        proxy = username + ":" + password + "@" + endpoint + ":" + port
+                        proxy_payload = {
+                            'http': 'http://' + proxy,
+                            'https': 'http://' + proxy,
+                        }
 
 
                     payload = {
@@ -159,59 +163,72 @@ class MessageWorker(Thread):
 
     def run(self):
         while True:
-            group_id, nickname, client_id, driver, csrf = self.queue.get()
+            item = self.queue.get()
+            if len(item) == 6:
+                group_id, nickname, client_id, driver, csrf, requests_proxy = item
+            else:
+                group_id, nickname, client_id, driver, csrf = item
+                requests_proxy = None
             try:
-                send_message(group_id, nickname, client_id, driver, csrf)
+                send_message(group_id, nickname, client_id, driver, csrf, requests_proxy)
             finally:
                 self.queue.task_done()
 
 
-def main(account):
+def main(account, proxy_config=None, done_event=None):
+    """
+    Run message bot for one account.
+    When proxy_config is provided (coordinated mode), use it instead of reading from file.
+    When done_event is provided, set it after all messages are sent (before quitting driver).
+    proxy_config dict: proxy_url, requests_proxy (for API requests), or None for standalone.
+    """
+    global driver
     try:
         email_text = account.split(":")[0]
         password_text = account.split(":")[1]
-    except:
+    except Exception:
         try:
             driver.quit()
-        except:
+        except Exception:
             pass
         return
-    
-    # Analyze proxy list
-    proxy_analysis = analyze_proxy_list("proxys.txt")
-    
-    with open("proxys.txt") as f:
-        proxy_list = f.readlines()
-        proxy_list = [x.strip() for x in proxy_list if x.strip() and not x.strip().startswith("#")]
-    
-    if not proxy_list:
-        print("[ERROR] No valid proxies found in proxys.txt")
-        return
-    
-    proxy = random.choice(proxy_list)
+
     path = os.getcwd()
-   
-    # Parse proxy using the parse_proxy function
-    try:
-        parsed_proxy = parse_proxy(proxy)
-        username = parsed_proxy["username"]
-        password = parsed_proxy["password"]
-        endpoint = parsed_proxy["host"]
-        port = parsed_proxy["port"]
-    except ValueError as e:
-        print(f"[ERROR] Failed to parse proxy: {proxy} - {e}")
-        return
-    
-    # Local proxy adds credentials to upstream – Chrome uses localhost, no auth dialog
-    local_port = start_local_proxy(endpoint, int(port), username, password)
-    proxy_url = f"127.0.0.1:{local_port}"
-    print(f"[INFO] Proxy: {proxy_url} -> {endpoint}:{port} (credentials injected, no dialog)")
+    proxy_url = None
+    requests_proxy = None
+
+    if proxy_config is not None:
+        proxy_url = proxy_config["proxy_url"]
+        requests_proxy = proxy_config["requests_proxy"]
+        print(f"[INFO] Message bot using shared proxy: {proxy_url}")
+    else:
+        # Standalone: read proxy from file
+        proxy_analysis = analyze_proxy_list("proxys.txt")
+        with open("proxys.txt") as f:
+            proxy_list = f.readlines()
+            proxy_list = [x.strip() for x in proxy_list if x.strip() and not x.strip().startswith("#")]
+        if not proxy_list:
+            print("[ERROR] No valid proxies found in proxys.txt")
+            return
+        proxy = random.choice(proxy_list)
+        try:
+            parsed_proxy = parse_proxy(proxy)
+            username = parsed_proxy["username"]
+            password = parsed_proxy["password"]
+            endpoint = parsed_proxy["host"]
+            port = parsed_proxy["port"]
+        except ValueError as e:
+            print(f"[ERROR] Failed to parse proxy: {proxy} - {e}")
+            return
+        local_port = start_local_proxy(endpoint, int(port), username, password)
+        proxy_url = f"127.0.0.1:{local_port}"
+        print(f"[INFO] Proxy: {proxy_url} -> {endpoint}:{port} (credentials injected, no dialog)")
 
     options = webdriver.ChromeOptions()
     options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 13_0_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36")
     #options.add_argument("--headless")
 
-    print(f"[INFO] Proxy: {username}")
+    print(f"[INFO] Proxy: {proxy_url}")
     options.add_argument(f"--proxy-server={proxy_url}")
     options.add_extension(path + "\\addon.zip")
     options.add_argument("--start-maximized")
@@ -341,29 +358,28 @@ def main(account):
 
     offset = 0
 
-    while True:  
+    while True:
         try:
-            # Parse proxy using the parse_proxy function
-            proxy = random.choice(proxy_list)
-            try:
-                parsed_proxy = parse_proxy(proxy)
-                username = parsed_proxy["username"]
-                password = parsed_proxy["password"]
-                endpoint = parsed_proxy["host"]
-                port = parsed_proxy["port"]
-            except ValueError as e:
-                print(f"[ERROR] Failed to parse proxy: {proxy} - {e}")
-                time.sleep(5)
-                continue
-            
-            proxy = username + ":" + password + "@" + endpoint + ":" + port
-            
-            proxy_payload = {
-                'http' : 'http://' + proxy,
-                'https' : 'http://' + proxy,
-            }
-            
-            
+            if requests_proxy is not None:
+                proxy_payload = requests_proxy
+            else:
+                proxy = random.choice(proxy_list)
+                try:
+                    parsed_proxy = parse_proxy(proxy)
+                    username = parsed_proxy["username"]
+                    password = parsed_proxy["password"]
+                    endpoint = parsed_proxy["host"]
+                    port = parsed_proxy["port"]
+                except ValueError as e:
+                    print(f"[ERROR] Failed to parse proxy: {proxy} - {e}")
+                    time.sleep(5)
+                    continue
+                proxy = username + ":" + password + "@" + endpoint + ":" + port
+                proxy_payload = {
+                    'http': 'http://' + proxy,
+                    'https': 'http://' + proxy,
+                }
+
             payload = {
                 "offset": offset,#rausfinden wie das genau berechnet wird
                 "filter":0
@@ -403,7 +419,10 @@ def main(account):
                     group_id = listdata["group_id"]
                     nickname = listdata["group_data"]["nickname"]
                     client_id = listdata["last_message"]["message_id"]
-                    queue.put((group_id, nickname, client_id, driver, csrf))
+                    if requests_proxy is not None:
+                        queue.put((group_id, nickname, client_id, driver, csrf, requests_proxy))
+                    else:
+                        queue.put((group_id, nickname, client_id, driver, csrf))
             else:
                 break
 
@@ -413,6 +432,8 @@ def main(account):
     queue.join()
 
     print("All messages sent.")
+    if done_event is not None:
+        done_event.set()
     time.sleep(5)
     try:
         driver.quit()

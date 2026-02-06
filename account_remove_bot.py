@@ -32,7 +32,13 @@ def safe_quit(drv):
         pass
 
 
-def main(account):
+def main(account, proxy_config=None, done_event=None):
+    """
+    Run account removal bot for one account.
+    When proxy_config is provided (coordinated mode), use it instead of reading from file.
+    When done_event is provided, wait for it before clicking the submit/delete button.
+    proxy_config dict: proxy_url (for Chrome); done_event: set by message_bot when all messages sent.
+    """
     try:
         email_text = account.split(":")[0]
         password_text = account.split(":")[1]
@@ -42,42 +48,41 @@ def main(account):
         except NameError:
             pass
         return
-    
-    # Analyze proxy list
-    proxy_analysis = analyze_proxy_list("proxys.txt")
-    
-    with open("proxys.txt") as f:
-        proxy_list = f.readlines()
-        proxy_list = [x.strip() for x in proxy_list if x.strip() and not x.strip().startswith("#")]
-    
-    if not proxy_list:
-        print("[ERROR] No valid proxies found in proxys.txt")
-        return
-    
-    proxy = random.choice(proxy_list)
+
     path = os.getcwd()
-   
-    # Parse proxy using the parse_proxy function
-    try:
-        parsed_proxy = parse_proxy(proxy)
-        username = parsed_proxy["username"]
-        password = parsed_proxy["password"]
-        endpoint = parsed_proxy["host"]
-        port = parsed_proxy["port"]
-    except ValueError as e:
-        print(f"[ERROR] Failed to parse proxy: {proxy} - {e}")
-        return
-    
-    # Local proxy adds credentials to upstream – Chrome uses localhost, no auth dialog
-    local_port = start_local_proxy(endpoint, int(port), username, password)
-    proxy_url = f"127.0.0.1:{local_port}"
-    print(f"[INFO] Proxy: {proxy_url} -> {endpoint}:{port} (credentials injected, no dialog)")
+    proxy_url = None
+
+    if proxy_config is not None:
+        proxy_url = proxy_config["proxy_url"]
+        print(f"[INFO] Account remove bot using shared proxy: {proxy_url}")
+    else:
+        # Standalone: read proxy from file
+        proxy_analysis = analyze_proxy_list("proxys.txt")
+        with open("proxys.txt") as f:
+            proxy_list = f.readlines()
+            proxy_list = [x.strip() for x in proxy_list if x.strip() and not x.strip().startswith("#")]
+        if not proxy_list:
+            print("[ERROR] No valid proxies found in proxys.txt")
+            return
+        proxy = random.choice(proxy_list)
+        try:
+            parsed_proxy = parse_proxy(proxy)
+            username = parsed_proxy["username"]
+            password = parsed_proxy["password"]
+            endpoint = parsed_proxy["host"]
+            port = parsed_proxy["port"]
+        except ValueError as e:
+            print(f"[ERROR] Failed to parse proxy: {proxy} - {e}")
+            return
+        local_port = start_local_proxy(endpoint, int(port), username, password)
+        proxy_url = f"127.0.0.1:{local_port}"
+        print(f"[INFO] Proxy: {proxy_url} -> {endpoint}:{port} (credentials injected, no dialog)")
 
     options = webdriver.ChromeOptions()
     options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 13_0_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36")
     #options.add_argument("--headless")
 
-    print(f"[INFO] Proxy: {username}")
+    print(f"[INFO] Proxy: {proxy_url}")
     options.add_argument(f"--proxy-server={proxy_url}")
     options.add_extension(path + "\\addon.zip")
     options.add_argument("--start-maximized")
@@ -187,9 +192,15 @@ def main(account):
         print(f"[WARN] Could not validate submit button: {e}")
 
     if submit_btn:
-        # Uncomment the line below when ready to actually submit
-        # submit_btn.click()
-        time.sleep(1)
+        if done_event is not None:
+            print("[INFO] Waiting for message_bot to finish sending all messages before clicking submit...")
+            done_event.wait()
+            print("[INFO] Messages done. Clicking submit/delete button.")
+            #submit_btn.click()
+            time.sleep(2)
+        else:
+            # Standalone: do not click by default (original behavior)
+            time.sleep(1)
     else:
         print("[WARN] Skipping submit – button not available.")
 

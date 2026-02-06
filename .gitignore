@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Sensitive / local config (credentials)
+accounts.txt
+proxys.txt
+gesperrt.txt
+
+# Temp proxy extensions (extension.py)
+temp_proxy_extensions/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Optional: uncomment if you don't want to track message/schedule files
+# nachricht1.txt
+# nachricht2.txt
+# startzeiten.txt
