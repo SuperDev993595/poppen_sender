@@ -65,7 +65,7 @@ def complete_profile_deletion(drv, password, done_event=None):
                 print("[INFO] Waiting for message_bot to finish sending all messages before completing profile deletion...")
                 done_event.wait()
                 
-            confirm_btn.click()
+            #confirm_btn.click()
             time.sleep(2)
         except NoSuchElementException:
             print("[WARN] Modal confirm button not found – modal may have different structure.")

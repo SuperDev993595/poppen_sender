@@ -82,18 +82,7 @@ def send_message(group_id, nickname, client_id, driver, csrf, requests_proxy=Non
     except:
         pass
         
-
-    while True:
-        try:
-            status = "NO"
-            payload = {'thread_id': nickname}
-            r = requests.get('http://510147000.swh.strato-hosting.eu/test/poppen_messages.php', params=payload, timeout=10)
-            output = r.json()
-            status = output['status']
-            break
-        except:
-            time.sleep(3)
-    
+    status = "YES"
 
     
     if status == "YES":
@@ -183,7 +172,7 @@ def main(account, proxy_config=None, done_event=None):
     proxy_config dict: proxy_url, requests_proxy (for API requests), or None for standalone.
     """
     
-    time.sleep(100)
+    time.sleep(10)
 
     global driver
     try:
@@ -408,6 +397,7 @@ def main(account, proxy_config=None, done_event=None):
             })
 
             print(response.status_code)
+            print("response.error: " + str(response.text))
             if response.status_code == 200:
                 response_json = response.json()
                 if len(response_json["data"]["list"]) == 0:
@@ -437,7 +427,7 @@ def main(account, proxy_config=None, done_event=None):
     print("All messages sent.")
     if done_event is not None:
         done_event.set()
-    time.sleep(5)
+    time.sleep(10)
     try:
         driver.quit()
     except Exception:
