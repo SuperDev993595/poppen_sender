@@ -51,14 +51,26 @@ def complete_profile_deletion(drv, password, done_event=None):
         # Delete profile button: type="submit" class="btn btn-danger"
         delete_btn = drv.find_element(By.CSS_SELECTOR, 'button[type="submit"].btn.btn-danger')
 
-        if done_event is not None:
-            print("[INFO] Waiting for message_bot to finish sending all messages before completing profile deletion...")
-            done_event.wait()
-
         delete_btn.click()
-        
-        time.sleep(2)
-        print("[INFO] Delete profile step 2 completed – password entered and delete button clicked.")
+        time.sleep(1)
+
+        # Modal "Are you sure?" – click Confirm (btn-primary in modal-footer)
+        try:
+            confirm_btn = drv.find_element(
+                By.CSS_SELECTOR,
+                '.modal-dialog .modal-footer .btn.btn-primary'
+            )
+
+            if done_event is not None:
+                print("[INFO] Waiting for message_bot to finish sending all messages before completing profile deletion...")
+                done_event.wait()
+                
+            confirm_btn.click()
+            time.sleep(2)
+        except NoSuchElementException:
+            print("[WARN] Modal confirm button not found – modal may have different structure.")
+
+        print("[INFO] Delete profile step 2 completed – password entered, delete and confirm clicked.")
         return True
     except NoSuchElementException as e:
         print(f"[WARN] complete_profile_deletion: element not found – {e}")

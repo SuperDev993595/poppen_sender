@@ -183,7 +183,7 @@ def main(account, proxy_config=None, done_event=None):
     proxy_config dict: proxy_url, requests_proxy (for API requests), or None for standalone.
     """
     
-    time.sleep(10)
+    time.sleep(100)
 
     global driver
     try:
