@@ -1,5 +1,5 @@
 @echo off
 title Poppen
 cd %~dp0
-python message_bot.py
+python run_coordinated.py
 pause
