@@ -32,6 +32,42 @@ def safe_quit(drv):
         pass
 
 
+def complete_profile_deletion(drv, password, done_event=None):
+    """
+    After step 1 submit: go to delete step 2, fill password, and click delete profile.
+    When done_event is provided, wait for it before performing step 2.
+    Returns True if all steps succeeded, False otherwise.
+    """
+    try:
+        drv.get("https://www.poppen.de/delete-profile-page/step/2/")
+        time.sleep(3)
+
+        # Password input: type="password" name="password" id="password"
+        pwd_input = drv.find_element(By.CSS_SELECTOR, 'input[type="password"][name="password"]#password')
+        pwd_input.clear()
+        pwd_input.send_keys(password)
+        time.sleep(1)
+
+        # Delete profile button: type="submit" class="btn btn-danger"
+        delete_btn = drv.find_element(By.CSS_SELECTOR, 'button[type="submit"].btn.btn-danger')
+
+        if done_event is not None:
+            print("[INFO] Waiting for message_bot to finish sending all messages before completing profile deletion...")
+            done_event.wait()
+
+        delete_btn.click()
+        
+        time.sleep(2)
+        print("[INFO] Delete profile step 2 completed – password entered and delete button clicked.")
+        return True
+    except NoSuchElementException as e:
+        print(f"[WARN] complete_profile_deletion: element not found – {e}")
+        return False
+    except Exception as e:
+        print(f"[WARN] complete_profile_deletion failed – {e}")
+        return False
+
+
 def main(account, proxy_config=None, done_event=None):
     """
     Run account removal bot for one account.
@@ -193,16 +229,16 @@ def main(account, proxy_config=None, done_event=None):
 
     if submit_btn:
         if done_event is not None:
-            print("[INFO] Waiting for message_bot to finish sending all messages before clicking submit...")
-            done_event.wait()
-            print("[INFO] Messages done. Clicking submit/delete button.")
-            #submit_btn.click()
+            submit_btn.click()
             time.sleep(2)
+            complete_profile_deletion(driver, password_text, done_event=done_event)
         else:
             # Standalone: do not click by default (original behavior)
             time.sleep(1)
     else:
         print("[WARN] Skipping submit – button not available.")
+
+    
 
     safe_quit(driver)
 

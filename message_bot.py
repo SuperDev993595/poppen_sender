@@ -182,6 +182,9 @@ def main(account, proxy_config=None, done_event=None):
     When done_event is provided, set it after all messages are sent (before quitting driver).
     proxy_config dict: proxy_url, requests_proxy (for API requests), or None for standalone.
     """
+    
+    time.sleep(10)
+
     global driver
     try:
         email_text = account.split(":")[0]
